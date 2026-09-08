@@ -223,7 +223,8 @@ def main():
         f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
         f.write('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n')
         for u in sorted_urls:
-            f.write(f"  <url><loc>{u}</loc></url>\n")
+            escaped_url = u.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("'", "&apos;").replace('"', "&quot;")
+            f.write(f"  <url><loc>{escaped_url}</loc></url>\n")
         f.write("</urlset>\n")
 
     print(f"[+] Successfully generated XML sitemap: {out_sitemap}")
