@@ -30,20 +30,25 @@ Standard web scrapers and crawlers frequently fail or capture empty pages when i
    - Major directives (e.g., NPR 7120.5F, NPR 8715.1B) have both individual HTML pages for every single chapter/appendix AND a complete unified PDF document.
    - **Solution**: The sitemap indexes both the individual HTML chapters (providing pinpoint section citations) and the complete unified PDF documents (providing full context and figures).
 
+4. **Strict "Latest Revision Only" Policy (No Outdated/Cancelled Documents)**:
+   - Historical revision pages (`directive_history.cfm`) contain tables listing cancelled revisions (e.g. Rev A, Rev B), previous expiration dates, and superseded policies.
+   - Change logs (`page_name=ChangeLog` / `page_name=ChangeHistory`) discuss obsolete requirements removed in earlier revisions.
+   - **Solution**: The crawler explicitly strips all historical revision tables, change logs, and cancelled documents (`cancelled_docs.cfm`), guaranteeing that LLM retrieval and search queries match strictly and exclusively against active, authoritative policy.
+
 ---
 
 ## Indexed Content Overview
 
-The sitemap indexes **2,470+** high-value URLs:
+The sitemap indexes **2,128** current, high-value URLs:
 
-- **262 Public NASA Policy Directives (NPDs) & Procedural Requirements (NPRs)**
-- **308 Direct Full PDF Documents & Official Attachments**:
+- **262 Public Active NASA Policy Directives (NPDs) & Procedural Requirements (NPRs)**
+- **298 Direct Master PDF Documents & Official Attachments**:
   - Unified master PDFs in `npg_img/`
-  - Technical and policy attachments in `/OPD_docs/` and `/NPD_attachments/`
-- **2,162 Clean HTML / CFM Pages**:
-  - Full directive overviews and metadata
-  - All individual chapters, prefaces, and appendices
-  - Full revision and change histories (`directive_history.cfm`)
+  - Active policy attachments in `/OPD_Docs/` and `/NPD_attachments/`
+- **1,830 Clean HTML Pages**:
+  - Master directive overview pages
+  - All active individual chapters, prefaces, and appendices
+- **0 Legacy/Cancelled Pages**: All historical revision tables and change logs are completely excluded.
 
 ---
 

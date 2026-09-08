@@ -35,7 +35,7 @@ HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf,*/*;q=0.8",
 }
 
-MINIMUM_EXPECTED_URLS = 1500
+MINIMUM_EXPECTED_URLS = 1800
 MAX_RETRIES = 4
 BACKOFF_BASE = 2
 MAX_WORKERS = 6
@@ -63,7 +63,6 @@ def fetch_with_retry(session: requests.Session, url: str, method: str = "GET") -
 
 def normalize_url(url: str, base_url: str = BASE_NODIS_URL) -> str:
     clean = urljoin(base_url, url).split("?")[0].split("#")[0].strip()
-    # Keep query parameters if this is a CFM page with Internal_ID
     if ".cfm" in url:
         clean = urljoin(base_url, url).split("#")[0].strip()
     parsed = urlparse(clean)
@@ -74,6 +73,7 @@ def normalize_url(url: str, base_url: str = BASE_NODIS_URL) -> str:
 def main():
     print("=" * 68)
     print(" NASA Online Directives Information System (NODIS) Sitemap Generator")
+    print(" (Latest NPR/NPD Revisions Only - Historical & Cancelled Excluded)")
     print("=" * 68)
 
     session = requests.Session()
@@ -92,17 +92,15 @@ def main():
         re.IGNORECASE,
     )
 
-    print(f"[+] Found {len(matches)} directives in master catalog.")
+    print(f"[+] Found {len(matches)} current directives in master catalog.")
 
     all_urls = set()
     all_urls.add(MASTER_REPORT_URL)
-    all_urls.add(MAIN_LIB_URL)
 
     def process_directive(item):
         href, internal_id, raw_name = item
         name = re.sub(r'<[^>]+>', '', raw_name).replace('&nbsp;', ' ').strip()
         main_url = f"{BASE_NODIS_URL}/{href}"
-        history_url = f"{BASE_NODIS_URL}/directive_history.cfm?Internal_ID={internal_id}&page_name=main"
 
         urls = set()
         thread_session = requests.Session()
@@ -117,11 +115,12 @@ def main():
         if "restricted_directives" in body or "nodis-dms" in body or resp.status_code in [401, 403]:
             return internal_id, name, "RESTRICTED", set()
 
-        # Public directive
+        # Public current directive: Add main overview of the latest revision
         urls.add(main_url)
-        urls.add(history_url)
+        # NOTE: We deliberately do NOT index directive_history.cfm because it contains
+        # cross-revision tables linking to superseded/cancelled versions (Rev A, B, etc.).
 
-        # Check for direct master PDF in npg_img/
+        # Check for direct master PDF of the latest revision in npg_img/
         full_pdf = f"{BASE_NODIS_URL}/npg_img/{internal_id}/{internal_id}.pdf"
         main_pdf = f"{BASE_NODIS_URL}/npg_img/{internal_id}/{internal_id}_main.pdf"
 
@@ -133,23 +132,32 @@ def main():
                 pdf_found = True
                 break
 
-        # Extract all chapter HTML pages
+        # Extract all active chapter, preface, and appendix HTML pages
         ch_matches = re.findall(
             r'href=[\"\'](displayDir\.cfm\?Internal_ID=' + re.escape(internal_id) + r'&page_name=([^\"\'>\s]+))[\"\']',
             body,
             re.IGNORECASE,
         )
         for ch_href, page_name in ch_matches:
-            if page_name.lower() != "main":
-                urls.add(f"{BASE_NODIS_URL}/{ch_href}")
+            # Exclude main (already added), and exclude ChangeLog/ChangeHistory to avoid indexing legacy text
+            if page_name.lower() in ["main", "changelog", "changehistory"] or "history" in page_name.lower():
+                continue
+            urls.add(f"{BASE_NODIS_URL}/{ch_href}")
 
-        # Extract any extra PDF attachments referenced in the document
+        # Extract active PDF attachments referenced in the directive
         pdf_matches = re.findall(r'href=[\"\']([^\"\']+\.pdf[^\s\"\'<>]*)[\"\']', body, re.IGNORECASE)
         for p in pdf_matches:
             clean_p = p.split('?')[0].split('#')[0]
-            if not clean_p.startswith('http'):
+            if clean_p.startswith('http://nodis3.gsfc.nasa.gov/'):
+                clean_p = clean_p.replace('http://', 'https://')
+            elif not clean_p.startswith('http'):
                 clean_p = f"{BASE_NODIS_URL}/" + clean_p.lstrip('/')
-            urls.add(clean_p)
+            
+            # Ensure it is hosted on NODIS, resolve relative path traversal, and exclude old/cancelled docs
+            if clean_p.startswith(BASE_NODIS_URL):
+                clean_p = clean_p.replace('/../', '/')
+                if not any(bad in clean_p.lower() for bad in ['cancel', 'hist', 'supersed']):
+                    urls.add(clean_p)
 
         return internal_id, name, "PUBLIC", urls
 
