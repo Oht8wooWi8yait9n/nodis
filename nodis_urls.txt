@@ -1933,7 +1933,7 @@ https://nodis3.gsfc.nasa.gov/npg_img/N_PD_3213_001A_/N_PD_3213_001A_.pdf
 https://nodis3.gsfc.nasa.gov/npg_img/N_PD_3280_003J_/N_PD_3280_003J_.pdf
 https://nodis3.gsfc.nasa.gov/npg_img/N_PD_3280_008G_/N_PD_3280_008G_.pdf
 https://nodis3.gsfc.nasa.gov/npg_img/N_PD_3300_003E_/N_PD_3300_003E_.pdf
-https://nodis3.gsfc.nasa.gov/npg_img/N_PD_3410_002H_/N_PD_3410_002H_.pdf
+https://nodis3.gsfc.nasa.gov/npg_img/N_PD_3410_002H_/N_PD_3410_002H__main.pdf
 https://nodis3.gsfc.nasa.gov/npg_img/N_PD_3451_005C_/N_PD_3451_005C_.pdf
 https://nodis3.gsfc.nasa.gov/npg_img/N_PD_3511_001A_/N_PD_3511_001A_.pdf
 https://nodis3.gsfc.nasa.gov/npg_img/N_PD_3713_002L_/N_PD_3713_002L_.pdf
@@ -2105,6 +2105,7 @@ https://nodis3.gsfc.nasa.gov/npg_img/N_PR_9095_0001_/N_PR_9095_0001_.pdf
 https://nodis3.gsfc.nasa.gov/npg_img/N_PR_9130_001A_/N_PR_9130_001A_.pdf
 https://nodis3.gsfc.nasa.gov/npg_img/N_PR_9200_0001_/N_PR_9200_0001_.pdf
 https://nodis3.gsfc.nasa.gov/npg_img/N_PR_9210_001A_/N_PR_9210_001A_.pdf
+https://nodis3.gsfc.nasa.gov/npg_img/N_PR_9220_001B_/N_PR_9220_001B_.pdf
 https://nodis3.gsfc.nasa.gov/npg_img/N_PR_9250_001C_/N_PR_9250_001C_.pdf
 https://nodis3.gsfc.nasa.gov/npg_img/N_PR_9260_001A_/N_PR_9260_001A_.pdf
 https://nodis3.gsfc.nasa.gov/npg_img/N_PR_9290_001A_/N_PR_9290_001A_.pdf
