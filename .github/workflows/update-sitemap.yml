@@ -1,0 +1,42 @@
+name: Update NODIS Sitemap
+
+on:
+  schedule:
+    # Run every Sunday at 00:00 UTC
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-sitemap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install requests
+
+      - name: Generate Sitemap
+        run: |
+          python generate_nodis_sitemap.py
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add nodis_sitemap.xml nodis_urls.txt
+          if git diff --staged --quiet; then
+            echo "No changes in NODIS directives catalog."
+          else
+            git commit -m "chore(sitemap): auto-update NODIS sitemap [skip ci]"
+            git push
+          fi
