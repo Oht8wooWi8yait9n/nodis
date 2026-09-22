@@ -38,20 +38,23 @@ HEADERS = {
 MINIMUM_EXPECTED_URLS = 1800
 MAX_RETRIES = 4
 BACKOFF_BASE = 2
-MAX_WORKERS = 6
+MAX_WORKERS = 3
 
 
 def fetch_with_retry(session: requests.Session, url: str, method: str = "GET") -> requests.Response | None:
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             if method.upper() == "HEAD":
-                resp = session.head(url, headers=HEADERS, timeout=12, allow_redirects=True)
+                resp = session.head(url, headers=HEADERS, timeout=15, allow_redirects=True)
+                # If HEAD returns method not allowed or server error, fall back to streaming GET
+                if resp.status_code in [405, 500, 502, 503, 504]:
+                    resp = session.get(url, headers=HEADERS, timeout=15, stream=True, allow_redirects=True)
             else:
-                resp = session.get(url, headers=HEADERS, timeout=15, allow_redirects=True)
+                resp = session.get(url, headers=HEADERS, timeout=20, allow_redirects=True)
             if resp.status_code == 200:
                 return resp
             if resp.status_code in [401, 403, 404]:
-                # Don't retry client auth / not found
+                # Authoritative response: client auth / resource not found
                 return resp
         except Exception:
             pass
@@ -97,7 +100,24 @@ def main():
     all_urls = set()
     all_urls.add(MASTER_REPORT_URL)
 
-    def process_directive(item):
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    out_sitemap = os.path.join(script_dir, "nodis_sitemap.xml")
+    out_txt = os.path.join(script_dir, "nodis_urls.txt")
+
+    # Load existing verified URLs to guarantee URL stickiness and eliminate flapping
+    known_master_pdfs = {}
+    if os.path.exists(out_txt):
+        with open(out_txt, "r") as f:
+            for line in f:
+                u = line.strip()
+                if "/npg_img/" in u and u.endswith(".pdf"):
+                    parts = u.split("/npg_img/")
+                    if len(parts) > 1:
+                        iid = parts[1].split("/")[0]
+                        known_master_pdfs[iid] = u
+        print(f"[+] Loaded {len(known_master_pdfs)} verified master PDFs from cache.")
+
+    def process_directive(item, is_retry: bool = False):
         href, internal_id, raw_name = item
         name = re.sub(r'<[^>]+>', '', raw_name).replace('&nbsp;', ' ').strip()
         main_url = f"{BASE_NODIS_URL}/{href}"
@@ -124,13 +144,37 @@ def main():
         full_pdf = f"{BASE_NODIS_URL}/npg_img/{internal_id}/{internal_id}.pdf"
         main_pdf = f"{BASE_NODIS_URL}/npg_img/{internal_id}/{internal_id}_main.pdf"
 
+        # Prioritize candidate probes deterministically:
+        # If this directive previously had a verified PDF URL, test it first to prevent flipping
+        candidate_pdfs = []
+        if internal_id in known_master_pdfs:
+            candidate_pdfs.append(known_master_pdfs[internal_id])
+        for c in [full_pdf, main_pdf]:
+            if c not in candidate_pdfs:
+                candidate_pdfs.append(c)
+
         pdf_found = False
-        for p in [full_pdf, main_pdf]:
+        pdf_network_error = False
+        for p in candidate_pdfs:
             p_resp = fetch_with_retry(thread_session, p, method="HEAD")
             if p_resp and p_resp.status_code == 200:
                 urls.add(p)
                 pdf_found = True
                 break
+            elif p_resp is None:
+                # Connection timeout or reset
+                pdf_network_error = True
+
+        # If master PDF was not found in the parallel pass, flag for sequential retry
+        if not pdf_found and not is_retry:
+            if pdf_network_error or internal_id in known_master_pdfs:
+                return internal_id, name, "MISSING_PDF", urls
+
+        # Fallback safety net on sequential retry: if probe timed out but we have a known PDF
+        if not pdf_found and internal_id in known_master_pdfs:
+            urls.add(known_master_pdfs[internal_id])
+            print(f"    [*] Preserving previously verified master PDF for {name} ({internal_id})")
+            pdf_found = True
 
         # Extract all active chapter, preface, and appendix HTML pages
         ch_matches = re.findall(
@@ -171,24 +215,23 @@ def main():
     elapsed = time.time() - start_time
     print(f"[+] Completed directives crawl in {elapsed:.1f}s")
 
-    # Serial retry pass for any failed items
-    failed_items = [item for item, (internal_id, name, status, u_set) in zip(items, results) if status == "FETCH_ERROR"]
-    if failed_items:
-        print(f"[*] Retrying {len(failed_items)} failed directives sequentially...")
-        for i, item in enumerate(items):
-            if results[i][2] == "FETCH_ERROR":
-                time.sleep(2)
-                recovered = process_directive(item)
-                results[i] = recovered
-                if recovered[2] != "FETCH_ERROR":
-                    print(f"    [+] Successfully recovered {recovered[1]}")
+    # Serial retry pass for any failed or missing PDF items
+    failed_indices = [i for i, r in enumerate(results) if r[2] in ("FETCH_ERROR", "MISSING_PDF")]
+    if failed_indices:
+        print(f"[*] Retrying {len(failed_indices)} failed/missing directives sequentially...")
+        for i in failed_indices:
+            time.sleep(1)
+            recovered = process_directive(items[i], is_retry=True)
+            results[i] = recovered
+            if recovered[2] not in ("FETCH_ERROR", "MISSING_PDF"):
+                print(f"    [+] Successfully recovered {recovered[1]}")
 
     public_count = 0
     restricted_count = 0
     restricted_names = []
 
     for internal_id, name, status, u_set in results:
-        if status == "PUBLIC":
+        if status in ("PUBLIC", "MISSING_PDF"):
             public_count += 1
             all_urls.update(u_set)
         elif status == "RESTRICTED":
